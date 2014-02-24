@@ -4,7 +4,6 @@
   "description": "launch iOS apps into the iOS Simulator from the command line (Xcode 4)",
   "main": "ios-sim",
   "scripts": {
-    "preinstall": "rake build"
   },
   "bin" : "build/Release/ios-sim" ,
   "repository": {

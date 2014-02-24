@@ -13,6 +13,9 @@ Fork differencies
 -------------
 Currently none, binary `ios-sim` is included in `dist/` for OS X
 
+- `dist/ios-sim` prebuilt binary
+- preinstall script removed from `package.json`
+
 Releasing
 ---------
 Push to master, clients install from master.
