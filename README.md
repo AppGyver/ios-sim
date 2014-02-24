@@ -5,6 +5,19 @@ The ios-sim tool is a command-line utility that launches an iOS application on
 the iOS Simulator. This allows for niceties such as automated testing without
 having to open XCode.
 
+
+AppGyver Steroids fork
+======================
+
+Fork differencies
+-------------
+Currently none, binary `ios-sim` is included in `dist/` for OS X
+
+Releasing
+---------
+Push to master, clients install from master.
+
+
 Features
 --------
 
@@ -44,7 +57,7 @@ When you want to release a version, do:
     $ rake version:bump v=NEW_VERSION
     $ rake release
     $ npm version NEW_VERSION -m "Updated to npm version %s"
-    
+
 tmux
 -----
 
