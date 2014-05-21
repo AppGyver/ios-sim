@@ -1,4 +1,4 @@
-## 1.9.0-AppGyver-p1 (TODO)
+## 1.9.0-AppGyver-p1 (05-21-2014)
 
 Features:
   - merged "1.9.0" aka fixes for black screen, added 64-bit support
