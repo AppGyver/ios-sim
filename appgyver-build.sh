@@ -2,8 +2,8 @@
 
 rm -rf build
 
-xcodebuild && cp build/Release/ios-sim dist/ios-sim
+xcodebuild && cp build/Release/ios-sim npm/bin/ios-sim
 
 echo "Version is: "
-dist/ios-sim --version
+npm/bin/ios-sim --version
 

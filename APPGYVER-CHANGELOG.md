@@ -1,3 +1,8 @@
+## 1.9.0-AppGyver-p2 (30-10-2014)
+
+Internal:
+  - Changed the deployment to be http+npm
+
 ## 1.9.0-AppGyver-p1 (05-21-2014)
 
 Features:
