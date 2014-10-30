@@ -25,6 +25,8 @@ NSString *deviceIpadRetina_64bit = @"iPad Retina (64-bit)";
 NSString* deviceTypeIdIphone4s = @"com.apple.CoreSimulator.SimDeviceType.iPhone-4s";
 NSString* deviceTypeIdIphone5 = @"com.apple.CoreSimulator.SimDeviceType.iPhone-5";
 NSString* deviceTypeIdIphone5s = @"com.apple.CoreSimulator.SimDeviceType.iPhone-5s";
+NSString* deviceTypeIdIphone6 = @"com.apple.CoreSimulator.SimDeviceType.iPhone-6";
+NSString* deviceTypeIdIphone6Plus = @"com.apple.CoreSimulator.SimDeviceType.iPhone-6-Plus";
 NSString* deviceTypeIdIpad2 = @"com.apple.CoreSimulator.SimDeviceType.iPad-2";
 NSString* deviceTypeIdIpadRetina = @"com.apple.CoreSimulator.SimDeviceType.iPad-Retina";
 NSString* deviceTypeIdIpadAir = @"com.apple.CoreSimulator.SimDeviceType.iPad-Air";
@@ -107,6 +109,37 @@ static pid_t gDebuggerProcessId;
     return ;
 }
 
+NSString* GetXcodeVersion() {
+    // Go look for it via xcodebuild.
+    NSTask* xcodeBuildTask = [[[NSTask alloc] init] autorelease];
+    [xcodeBuildTask setLaunchPath:@"/usr/bin/xcodebuild"];
+    [xcodeBuildTask setArguments:[NSArray arrayWithObject:@"-version"]];
+
+    NSPipe* outputPipe = [NSPipe pipe];
+    [xcodeBuildTask setStandardOutput:outputPipe];
+    NSFileHandle* outputFile = [outputPipe fileHandleForReading];
+
+    [xcodeBuildTask launch];
+    NSData* outputData = [outputFile readDataToEndOfFile];
+    [xcodeBuildTask terminate];
+
+    NSString* output =
+    [[[NSString alloc] initWithData:outputData
+                           encoding:NSUTF8StringEncoding] autorelease];
+    output = [output stringByTrimmingCharactersInSet:
+              [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([output length] == 0) {
+        output = nil;
+    } else {
+        NSArray* parts = [output componentsSeparatedByCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([parts count] >= 2) {
+            return parts[1];
+        }
+    }
+    return output;
+}
+
+
 
 // Finds the developer dir via xcode-select or the DEVELOPER_DIR environment
 // variable.
@@ -114,8 +147,9 @@ NSString* FindDeveloperDir() {
     // Check the env first.
     NSDictionary* env = [[NSProcessInfo processInfo] environment];
     NSString* developerDir = [env objectForKey:@"DEVELOPER_DIR"];
-    if ([developerDir length] > 0)
+    if ([developerDir length] > 0) {
         return developerDir;
+    }
 
     // Go look for it via xcode-select.
     NSTask* xcodeSelectTask = [[[NSTask alloc] init] autorelease];
@@ -135,10 +169,12 @@ NSString* FindDeveloperDir() {
                            encoding:NSUTF8StringEncoding] autorelease];
     output = [output stringByTrimmingCharactersInSet:
               [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if ([output length] == 0)
+    if ([output length] == 0) {
         output = nil;
+    }
     return output;
 }
+
 - (void) printUsage {
   fprintf(stderr, "Usage: ios-sim <command> <options> [--args ...]\n");
   fprintf(stderr, "\n");
@@ -155,12 +191,6 @@ NSString* FindDeveloperDir() {
   fprintf(stderr, "  --exit                          Exit after startup\n");
   fprintf(stderr, "  --debug                         Attach LLDB to the application on startup\n");
   fprintf(stderr, "  --use-gdb                       Use GDB instead of LLDB. (Requires --debug)\n");
-  fprintf(stderr, "  --sdk <sdkversion>              The iOS SDK version to run the application on (defaults to the latest)\n");
-  fprintf(stderr, "  --devicetypeid <device type>    The id of the device type that should be simulated (Xcode6+)\n");
-  fprintf(stderr, "  --family <device family>        The device type that should be simulated (defaults to `iphone')\n");
-  fprintf(stderr, "  --retina                        Start a retina device\n");
-  fprintf(stderr, "  --tall                          In combination with --retina flag, start the tall version of the retina device (e.g. iPhone 5 (4-inch))\n");
-  fprintf(stderr, "  --64bit                         In combination with --retina flag and the --tall flag, start the 64bit version of the tall retina device (e.g. iPhone 5S (4-inch 64bit))\n");
   fprintf(stderr, "  --uuid <uuid>                   A UUID identifying the session (is that correct?)\n");
   fprintf(stderr, "  --env <environment file path>   A plist file containing environment key-value pairs that should be set\n");
   fprintf(stderr, "  --setenv NAME=VALUE             Set an environment variable\n");
@@ -168,6 +198,18 @@ NSString* FindDeveloperDir() {
   fprintf(stderr, "  --stderr <stderr file path>     The path where stderr of the simulator will be redirected to (defaults to stderr of ios-sim)\n");
   fprintf(stderr, "  --timeout <seconds>             The timeout time to wait for a response from the Simulator. Default value: 30 seconds\n");
   fprintf(stderr, "  --args <...>                    All following arguments will be passed on to the application\n");
+  fprintf(stderr, "  --devicetypeid <device type>    The id of the device type that should be simulated (Xcode6+). Use 'showdevicetypes' to list devices.\n");
+  fprintf(stderr, "                                  e.g \"com.apple.CoreSimulator.SimDeviceType.Resizable-iPhone6, 8.0\"\n");
+  fprintf(stderr, "DEPRECATED in 3.x, use devicetypeid instead:\n");
+  fprintf(stderr, "  --sdk <sdkversion>              The iOS SDK version to run the application on (defaults to the latest)\n");
+  fprintf(stderr, "  --family <device family>        The device type that should be simulated (defaults to `iphone')\n");
+  fprintf(stderr, "  --retina                        Start a retina device\n");
+  fprintf(stderr, "  --tall                          In combination with --retina flag, start the tall version of the retina device (e.g. iPhone 5 (4-inch))\n");
+  fprintf(stderr, "  --64bit                         In combination with --retina flag and the --tall flag, start the 64bit version of the tall retina device (e.g. iPhone 5S (4-inch 64bit))\n");
+}
+
+- (void) printDeprecation:(char*)option {
+    fprintf(stderr, "Usage of '%s' is deprecated in 3.x. Use --devicetypeid instead.\n", option);
 }
 
 
@@ -190,7 +232,7 @@ NSString* FindDeveloperDir() {
         SimDeviceSet* deviceSet = [simDeviceSet defaultSet];
         NSArray* devices = [deviceSet availableDevices];
         for (SimDevice* device in devices) {
-            nsfprintf(stderr, @"%@", device.deviceType.identifier);
+            nsfprintf(stderr, @"%@, %@", device.deviceType.identifier, device.runtime.versionString);
         }
     }
 
@@ -396,6 +438,14 @@ static void ChildSignal(int arg) {
   if ([config respondsToSelector:@selector(setDevice:)]) {
     // Xcode6+
     config.device = [self findDeviceWithFamily:family retina:retinaDevice isTallDevice:tallDevice is64Bit:is64BitDevice];
+
+    // The iOS 8 simulator treats stdout/stderr paths relative to the simulator's data directory.
+    // Create symbolic links in the data directory that points at the real stdout/stderr paths.
+    if ([config.simulatedSystemRoot.sdkVersion isEqual:@"8.0"]) {
+      NSString* dataPath = config.device.dataPath;
+      [[NSFileManager defaultManager] createSymbolicLinkAtPath:[dataPath stringByAppendingPathComponent:stdoutPath] withDestinationPath:stdoutPath error:NULL];
+      [[NSFileManager defaultManager] createSymbolicLinkAtPath:[dataPath stringByAppendingPathComponent:stderrPath] withDestinationPath:stderrPath error:NULL];
+    }
   } else {
     // Xcode5 or older
     NSString* devicePropertyValue = [self changeDeviceType:family retina:retinaDevice isTallDevice:tallDevice is64Bit:is64BitDevice];
@@ -451,12 +501,25 @@ static void ChildSignal(int arg) {
 
     SimDeviceSet* deviceSet = [[self FindClassByName:@"SimDeviceSet"] defaultSet];
     NSArray* devices = [deviceSet availableDevices];
-    for (SimDevice* device in devices) {
-        SimDeviceType* type = device.deviceType;
-        if ([type.identifier isEqualToString:devTypeId]) {
-            return device;
-        }
-    }
+	NSArray* deviceTypeAndVersion = [devTypeId componentsSeparatedByString:@","];
+	if(deviceTypeAndVersion.count == 2) {
+		NSString* typeIdentifier = [deviceTypeAndVersion.firstObject stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+		NSString* versionString = [deviceTypeAndVersion.lastObject stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];;
+		for (SimDevice* device in devices) {
+			if ([device.deviceType.identifier isEqualToString:typeIdentifier] && [device.runtime.versionString isEqualToString:versionString]) {
+				return device;
+			}
+		}
+	}
+	//maintain old behavior (if the device identifier doesn't have a version as part of the identifier, loop through to find the first matching)
+	else
+	{
+		for (SimDevice* device in devices) {
+			if ([device.deviceType.identifier isEqualToString:devTypeId]) {
+				return device;
+			}
+		}
+	}
     // Default to whatever is the first device
     return [devices count] > 0 ? [devices objectAtIndex:0] : nil;
 }
@@ -506,6 +569,13 @@ static void ChildSignal(int arg) {
   if (argc < 2) {
     [self printUsage];
     exit(EXIT_FAILURE);
+  }
+  
+  NSString* xcodeVersion = GetXcodeVersion();
+  if (!([xcodeVersion compare:@"6.0" options:NSNumericSearch] != NSOrderedAscending)) {
+      nsprintf(@"You need to have at least Xcode 6.0 installed -- you have version %@.", xcodeVersion);
+      nsprintf(@"Run 'xcode-select --print-path' to check which version of Xcode is enabled.");
+      exit(EXIT_FAILURE);
   }
 
   retinaDevice = NO;
@@ -576,6 +646,7 @@ static void ChildSignal(int arg) {
         }
       }
       else if (strcmp(argv[i], "--sdk") == 0) {
+        [self printDeprecation:argv[i]];
         i++;
 	   [self LoadSimulatorFramework:developerDir];
         NSString* ver = [NSString stringWithCString:argv[i] encoding:NSUTF8StringEncoding];
@@ -594,6 +665,7 @@ static void ChildSignal(int arg) {
           exit(EXIT_FAILURE);
         }
       } else if (strcmp(argv[i], "--family") == 0) {
+        [self printDeprecation:argv[i]];
         i++;
         family = [NSString stringWithUTF8String:argv[i]];
       } else if (strcmp(argv[i], "--uuid") == 0) {
@@ -628,10 +700,13 @@ static void ChildSignal(int arg) {
           xctest = [[NSString stringWithUTF8String:argv[i]] expandPath];
           NSLog(@"xctest: %@", xctest);
       } else if (strcmp(argv[i], "--retina") == 0) {
+          [self printDeprecation:argv[i]];
           retinaDevice = YES;
       } else if (strcmp(argv[i], "--tall") == 0) {
+          [self printDeprecation:argv[i]];
           tallDevice = YES;
       } else if (strcmp(argv[i], "--64bit") == 0) {
+          [self printDeprecation:argv[i]];
           is64BitDevice = YES;
       } else if (strcmp(argv[i], "--args") == 0) {
         i++;

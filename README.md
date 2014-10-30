@@ -1,9 +1,11 @@
 ios-sim
 =======
 
+Supports Xcode 6 only since version 3.x.
+
 The ios-sim tool is a command-line utility that launches an iOS application on
 the iOS Simulator. This allows for niceties such as automated testing without
-having to open XCode.
+having to open Xcode.
 
 
 AppGyver Steroids fork
@@ -11,20 +13,17 @@ AppGyver Steroids fork
 
 Fork differencies
 -------------
-Currently none, binary `ios-sim` is included in `dist/` for OS X
-
-- `dist/ios-sim` prebuilt binary
-- preinstall script removed from `package.json`
+Currently none, binary `ios-sim` is published to `npm/bin`
 
 Releasing
 ---------
-Push to master, clients install from master.
+See publishing script.
 
 
 Features
 --------
 
-* Choose the device family to simulate, i.e. iPhone or iPad.
+* Choose the device family to simulate, i.e. iPhone or iPad. Run using "showdevicetypes" option to see available device types, and pass it in as the "devicetypeid" parameter.
 * Setup environment variables.
 * Pass arguments to the application.
 * See the stdout and stderr, or redirect them to files.
@@ -50,12 +49,6 @@ Options:
   --exit                          Exit after startup
   --debug                         Attach LLDB to the application on startup
   --use-gdb                       Use GDB instead of LLDB. (Requires --debug)
-  --sdk <sdkversion>              The iOS SDK version to run the application on (defaults to the latest)
-  --devicetypeid <device type>    The id of the device type that should be simulated (Xcode6+)
-  --family <device family>        The device type that should be simulated (defaults to `iphone')
-  --retina                        Start a retina device
-  --tall                          In combination with --retina flag, start the tall version of the retina device (e.g. iPhone 5 (4-inch))
-  --64bit                         In combination with --retina flag and the --tall flag, start the 64bit version of the tall retina device (e.g. iPhone 5S (4-inch 64bit))
   --uuid <uuid>                   A UUID identifying the session (is that correct?)
   --env <environment file path>   A plist file containing environment key-value pairs that should be set
   --setenv NAME=VALUE             Set an environment variable
@@ -63,6 +56,14 @@ Options:
   --stderr <stderr file path>     The path where stderr of the simulator will be redirected to (defaults to stderr of ios-sim)
   --timeout <seconds>             The timeout time to wait for a response from the Simulator. Default value: 30 seconds
   --args <...>                    All following arguments will be passed on to the application
+  --devicetypeid <device type>    The id of the device type that should be simulated (Xcode6+). Use 'showdevicetypes' to list devices.
+                                  e.g "com.apple.CoreSimulator.SimDeviceType.Resizable-iPhone6, 8.0"
+DEPRECATED in 3.x, use devicetypeid instead:
+  --sdk <sdkversion>              The iOS SDK version to run the application on (defaults to the latest)
+  --family <device family>        The device type that should be simulated (defaults to `iphone')
+  --retina                        Start a retina device
+  --tall                          In combination with --retina flag, start the tall version of the retina device (e.g. iPhone 5 (4-inch))
+  --64bit                         In combination with --retina flag and the --tall flag, start the 64bit version of the tall retina device (e.g. iPhone 5S (4-inch 64bit))
 ```
 
 Installation
@@ -74,8 +75,8 @@ With node.js (at least 0.10.20):
 
 Download an archive:
 
-    $ curl -L https://github.com/phonegap/ios-sim/zipball/2.0.1 -o ios-sim-2.0.1.zip
-    $ unzip ios-sim-2.0.1.zip
+    $ curl -L https://github.com/phonegap/ios-sim/zipball/3.0.0 -o ios-sim-3.0.0.zip
+    $ unzip ios-sim-3.0.0.zip
 
 Or from a git clone:
 
@@ -89,13 +90,13 @@ Troubleshooting
 ------------
 
 Make sure you enable Developer Mode on your machine:
-    
+
     $ DevToolsSecurity -enable
 
 Make sure multiple instances of launchd_sim are not running:
-    
+
     $ killall launchd_sim
-    
+
 Development
 -----------
 
