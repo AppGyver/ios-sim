@@ -22,6 +22,7 @@ NSString *deviceIpad = @"iPad";
 NSString *deviceIpadRetina = @"iPad Retina";
 NSString *deviceIpadRetina_64bit = @"iPad Retina (64-bit)";
 
+NSString* deviceTypeIdPrefix = @"com.apple.CoreSimulator.SimDeviceType.";
 NSString* deviceTypeIdIphone4s = @"com.apple.CoreSimulator.SimDeviceType.iPhone-4s";
 NSString* deviceTypeIdIphone5 = @"com.apple.CoreSimulator.SimDeviceType.iPhone-5";
 NSString* deviceTypeIdIphone5s = @"com.apple.CoreSimulator.SimDeviceType.iPhone-5s";
@@ -71,7 +72,7 @@ static pid_t gDebuggerProcessId;
     NSBundle* dvtFoundationBundle =
     [NSBundle bundleWithPath:dvtFoundationPath];
     if (![dvtFoundationBundle load]){
-        nsprintf(@"Unable to dvtFoundationBundle. Error: ");
+        nsprintf(@"Unable to dvtFoundationBundle %@", dvtFoundationPath);
         exit(EXIT_FAILURE);
         return ;
     }
@@ -79,19 +80,19 @@ static pid_t gDebuggerProcessId;
     NSBundle* devToolsFoundationBundle =
     [NSBundle bundleWithPath:devToolsFoundationPath];
     if (![devToolsFoundationBundle load]){
-        nsprintf(@"Unable to devToolsFoundationPath. Error: ");
+        nsprintf(@"Unable to devToolsFoundationPath %@", devToolsFoundationPath);
         return ;
     }
     NSString* coreSimulatorPath = [developerDir stringByAppendingPathComponent:kCoreSimulatorRelativePath];
     if ([[NSFileManager defaultManager] fileExistsAtPath:coreSimulatorPath]) {
         NSBundle* coreSimulatorBundle = [NSBundle bundleWithPath:coreSimulatorPath];
         if (![coreSimulatorBundle load]){
-            nsprintf(@"Unable to coreSimulatorPath. Error: ");
+            nsprintf(@"Unable to coreSimulatorPath %@", coreSimulatorPath);
             return ;
         }
     }
     // Prime DVTPlatform.
-    NSError* error;
+    NSError* error = nil;
     Class DVTPlatformClass = [self FindClassByName:@"DVTPlatform"];
     if (![DVTPlatformClass loadAllPlatformsReturningError:&error]) {
         nsprintf(@"Unable to loadAllPlatformsReturningError. Error: %@",[error localizedDescription]);
@@ -103,10 +104,9 @@ static pid_t gDebuggerProcessId;
     }
     NSBundle* simBundle = [NSBundle bundleWithPath:simBundlePath];
     if (![simBundle load]){
-        nsprintf(@"Unable to load simulator framework. Error: %@",[error localizedDescription]);
+        nsprintf(@"Unable to load simulator bundle %@", simBundlePath);
         return ;
     }
-    return ;
 }
 
 NSString* GetXcodeVersion() {
@@ -232,7 +232,7 @@ NSString* FindDeveloperDir() {
         SimDeviceSet* deviceSet = [simDeviceSet defaultSet];
         NSArray* devices = [deviceSet availableDevices];
         for (SimDevice* device in devices) {
-            nsfprintf(stderr, @"%@, %@", device.deviceType.identifier, device.runtime.versionString);
+            nsfprintf(stdout, @"%@,%@", [device.deviceType.identifier substringFromIndex:[device.deviceType.identifier rangeOfString:deviceTypeIdPrefix].length], device.runtime.versionString);
         }
     }
 
@@ -332,7 +332,8 @@ static void ChildSignal(int arg) {
 
 
 - (void)createStdioFIFO:(NSFileHandle **)fileHandle ofType:(NSString *)type atPath:(NSString **)path {
-  *path = [NSString stringWithFormat:@"%@/ios-sim-%@-pipe-%d", NSTemporaryDirectory(), type, (int)time(NULL)];
+  NSString *filename = [NSString stringWithFormat:@"ios-sim-%@-pipe-%d", type, (int)time(NULL)];
+  *path = [NSTemporaryDirectory() stringByAppendingPathComponent:filename];
   if (mkfifo([*path UTF8String], S_IRUSR | S_IWUSR) == -1) {
     nsprintf(@"Unable to create %@ named pipe `%@'", type, *path);
     exit(EXIT_FAILURE);
@@ -363,6 +364,27 @@ static void ChildSignal(int arg) {
 }
 
 
+- (BOOL) version:(NSString*)versionA isAtLeastVersion:(NSString*)versionB
+{
+    return ([versionA compare:versionB options:NSNumericSearch] != NSOrderedAscending);
+}
+
+// Given a filesystem path, creates all intermediate directories up to but not
+// including the final path component.
+- (void)createContainingDirectoryOrDie:(NSString *)path
+{
+  NSString* containingDirectory = [path stringByDeletingLastPathComponent];
+  NSError *error = nil;
+  [[NSFileManager defaultManager] createDirectoryAtPath:containingDirectory
+                          withIntermediateDirectories:YES
+                                           attributes:nil
+                                                error:&error];
+  if (error != nil) {
+    nsprintf(@"Unable to create directory `%@': %@", NSTemporaryDirectory(), error);
+    exit(EXIT_FAILURE);
+  }
+}
+
 - (int)launchApp:(NSString *)path withFamily:(NSString *)family
                                         uuid:(NSString *)uuid
                                  environment:(NSDictionary *)environment
@@ -373,7 +395,7 @@ static void ChildSignal(int arg) {
   DTiPhoneSimulatorApplicationSpecifier *appSpec;
   DTiPhoneSimulatorSessionConfig *config;
   DTiPhoneSimulatorSession *session;
-  NSError *error;
+  NSError *error = nil;
 
   NSFileManager *fileManager = [[[NSFileManager alloc] init] autorelease];
   if (!startOnly && ![fileManager fileExistsAtPath:path]) {
@@ -441,10 +463,14 @@ static void ChildSignal(int arg) {
 
     // The iOS 8 simulator treats stdout/stderr paths relative to the simulator's data directory.
     // Create symbolic links in the data directory that points at the real stdout/stderr paths.
-    if ([config.simulatedSystemRoot.sdkVersion isEqual:@"8.0"]) {
+    if ([self version:config.simulatedSystemRoot.sdkVersion isAtLeastVersion:@"8.0"]) {
       NSString* dataPath = config.device.dataPath;
-      [[NSFileManager defaultManager] createSymbolicLinkAtPath:[dataPath stringByAppendingPathComponent:stdoutPath] withDestinationPath:stdoutPath error:NULL];
-      [[NSFileManager defaultManager] createSymbolicLinkAtPath:[dataPath stringByAppendingPathComponent:stderrPath] withDestinationPath:stderrPath error:NULL];
+      NSString* stdoutLinkPath = [dataPath stringByAppendingPathComponent:stdoutPath];
+      [self createContainingDirectoryOrDie:stdoutLinkPath];
+      [[NSFileManager defaultManager] createSymbolicLinkAtPath:stdoutLinkPath withDestinationPath:stdoutPath error:NULL];
+      NSString* stderrLinkPath = [dataPath stringByAppendingPathComponent:stderrPath];
+      [self createContainingDirectoryOrDie:stderrLinkPath];
+      [[NSFileManager defaultManager] createSymbolicLinkAtPath:stderrLinkPath withDestinationPath:stderrPath error:NULL];
     }
   } else {
     // Xcode5 or older
@@ -460,7 +486,7 @@ static void ChildSignal(int arg) {
   }
 
   if (![session requestStartWithConfig:config timeout:timeout error:&error]) {
-    nsprintf(@"Could not start simulator session: %@", error);
+    nsprintf(@"Could not start simulator session: %@", [error localizedDescription]);
     return EXIT_FAILURE;
   }
 
@@ -570,7 +596,7 @@ static void ChildSignal(int arg) {
     [self printUsage];
     exit(EXIT_FAILURE);
   }
-  
+
   NSString* xcodeVersion = GetXcodeVersion();
   if (!([xcodeVersion compare:@"6.0" options:NSNumericSearch] != NSOrderedAscending)) {
       nsprintf(@"You need to have at least Xcode 6.0 installed -- you have version %@.", xcodeVersion);
@@ -674,6 +700,9 @@ static void ChildSignal(int arg) {
       } else if (strcmp(argv[i], "--devicetypeid") == 0) {
           i++;
           deviceTypeId = [NSString stringWithUTF8String:argv[i]];
+          if (![deviceTypeId containsString:deviceTypeIdPrefix]) {
+              deviceTypeId = [deviceTypeIdPrefix stringByAppendingString:deviceTypeId];
+          }
       } else if (strcmp(argv[i], "--setenv") == 0) {
         i++;
         NSArray *parts = [[NSString stringWithUTF8String:argv[i]] componentsSeparatedByString:@"="];

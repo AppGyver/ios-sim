@@ -7,3 +7,4 @@ build
 .DS_Store
 *.xcworkspace
 xcuserdata
+node_modules
